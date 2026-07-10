@@ -76,7 +76,7 @@ jobs:
           npm run test:e2e
 
   # ==========================================
-  # JOB 4: BUILD & EXPORT ARTIFACT (Pake Runner Lokal)
+  # JOB 4: BUILD & AUTOMATIC DEPLOY (Pake Runner Lokal)
   # ==========================================
   build-image:
     needs: test
@@ -85,14 +85,22 @@ jobs:
       - name: Checkout kode
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1 # ← Dioptimalkan juga untuk runner lokal
+          fetch-depth: 1
 
-      # Build menggunakan Docker Compose
+      # 1. Build menggunakan Docker Compose untuk memperbarui image lokal
       - name: Build Docker Images via Compose
         run: |
           docker compose build
 
-      # Ekspor Image Backend & Frontend jadi file .tar
+      # 2. NAH, TAMBAHKAN BARIS INI UNTUK LANGSUNG DEPLOY OTOMATIS!
+      - name: Deploy / Restart Containers di Laptop Local
+        run: |
+          docker compose up -d --force-recreate --remove-orphans
+
+      # ====================================================================
+      # Catatan: Langkah 'docker save' & 'upload-artifact' di bawah ini
+      # sekarang opsional (bisa dihapus/tetap dibiarkan buat cadangan di GitHub)
+      # ====================================================================
       - name: Save Images as Artifacts
         run: |
           docker save 3-docker-compose-with-app-creditapp-ui:latest -o frontend-image.tar
