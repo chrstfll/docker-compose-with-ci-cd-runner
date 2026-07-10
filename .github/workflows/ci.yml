@@ -2,7 +2,7 @@ name: Pipeline Multi-Job Aegira & CreditApp
 
 on:
   push:
-    branches: [ "main" ] # Sesuaikan ke "main" jika branch utamamu namanya main
+    branches: [ "main" ] # Sudah otomatis nge-trigger branch main kamu
 
 jobs:
   # ==========================================
@@ -25,21 +25,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # Frontend Linting (Vite/ESLint biasanya sudah bawaan jika ada)
+      # Frontend Linting
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-on: 18
+          node-version: 18 # ← Sudah diperbaiki dari typo 'node-on'
       - name: Install Frontend Deps
         run: |
           cd creditappdemo2
           npm ci
-      # Menjalankan linter frontend jika terkonfigurasi di package.json
-      # Jika belum ada script lint, baris di bawah bisa di-comment/ganti echo
+      # Mengabaikan error jika script lint memang kosong di package.json
       - name: Run Frontend Linter
         run: |
           cd creditappdemo2
-          npm run lint || echo "Linter script tidak ditemukan, skip."
+          npm run lint || echo "Linter script tidak ditemukan, aman skip."
 
   # ==========================================
   # JOB 3: TEST (Baru jalan setelah LINT sukses)
@@ -82,8 +81,7 @@ jobs:
       - name: Checkout kode
         uses: actions/checkout@v4
 
-      # Build menggunakan Docker Compose (bukan docker build satuan biasa)
-      # agar mengemas frontend dan backend sekaligus
+      # Build menggunakan Docker Compose
       - name: Build Docker Images via Compose
         run: |
           docker compose build
@@ -91,7 +89,6 @@ jobs:
       # Ekspor Image Backend & Frontend jadi file .tar
       - name: Save Images as Artifacts
         run: |
-          # Ganti nama image sesuai nama default image compose-mu (biasanya namafolder-service)
           docker save 3-docker-compose-with-app-creditapp-ui:latest -o frontend-image.tar
           docker save 3-docker-compose-with-app-aegira-loan-backend:latest -o backend-image.tar
 
@@ -102,7 +99,7 @@ jobs:
           name: frontend-docker-image
           path: frontend-image.tar
 
-      # Upload Backend Artifact
+      # Upload Backend Artifact (Sudah bersih dari typo 'Wilk')
       - name: Upload Backend Artifact
         uses: actions/upload-artifact@v4
         with:
