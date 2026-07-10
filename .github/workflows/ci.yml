@@ -92,7 +92,7 @@ jobs:
         run: |
           docker compose build
 
-      # 2. Restart kontainer aplikasi di laptop lokal agar kode terbaru aktif
+      # 2. HANYA UP APLIKASI UTAMA SAJA, JANGAN SEBUT RUNNER-NYA BIAR GAK BENTROK
       - name: Deploy / Restart Containers di Laptop Local
         run: |
-          docker compose up -d --force-recreate --remove-orphans
+          docker compose up -d --force-recreate creditapp-ui aegira-loan-backend aegira-db aegira-cache
