@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. FRONTEND / UI SERVICE (creditappdemo2)
+  # ==========================================
+  creditapp-ui:
+    build:
+      context: ./creditappdemo2
+      dockerfile: Dockerfile
+    container_name: creditapp-ui-container
+    ports:
+      - "5173:5173" # Akses aplikasi utama dari browser lewat port 8080
+    env_file:
+      - ./creditappdemo2/.env
+    environment:
+      - NODE_ENV=production
+      # Contoh mengarahkan URL API frontend Anda ke backend service Docker
+      - BACKEND_API_URL=http://aegira-loan-backend:8081
+    networks:
+      - aegira-network
+    depends_on:
+      - aegira-loan-backend
+
+  # ==========================================
+  # 2. BACKEND SERVICE (aegira-loan-service)
+  # ==========================================
+  aegira-loan-backend:
+    build:
+      context: ./aegira-loan-service
+      dockerfile: Dockerfile
+    container_name: aegira-loan-backend-container
+    ports:
+      - "8081:8080" # Sesuaikan port ekspos backend jika berbeda (misal: 8080/3000)
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aegira-db:5432/aegiraloan
+      - SPRING_DATASOURCE_USERNAME=aegira_user
+      - SPRING_DATASOURCE_PASSWORD=aegira_secure_password
+      - SPRING_DATA_REDIS_HOST=aegira-cache
+      - SPRING_DATA_REDIS_PORT=6379
+    networks:
+      - aegira-network
+    depends_on:
+      aegira-db:
+        condition: service_healthy
+      aegira-cache:
+        condition: service_started
+
+  # ==========================================
+  # 3. DATABASE SERVICE (PostgreSQL)
+  # ==========================================
+  aegira-db:
+    image: postgres:15-alpine
+    container_name: aegira-postgres-container
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=aegiraloan
+      - POSTGRES_USER=aegira_user
+      - POSTGRES_PASSWORD=aegira_secure_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aegira-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegira_user -d aegiraloan"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # 4. CACHE SERVICE (Redis)
+  # ==========================================
+  aegira-cache:
+    image: redis:7-alpine
+    container_name: aegira-redis-container
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aegira-network
+
+# ==========================================
+# VOLUMES & NETWORKS DEFINITIONS
+# ==========================================
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  aegira-network:
+    driver: bridge
