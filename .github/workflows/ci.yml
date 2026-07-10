@@ -1,0 +1,110 @@
+name: Pipeline Multi-Job Aegira & CreditApp
+
+on:
+  push:
+    branches: [ "main" ] # Sesuaikan ke "main" jika branch utamamu namanya main
+
+jobs:
+  # ==========================================
+  # JOB 1: HELLO (Ucapin Salam)
+  # ==========================================
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ucapin salam
+        run: echo "Halo, ini pipeline otomatisasi Aegira & CreditApp!"
+      - name: Cek waktu sekarang
+        run: date
+
+  # ==========================================
+  # JOB 2: LINT (Pengecekan Kode)
+  # ==========================================
+  lint:
+    needs: hello
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Frontend Linting (Vite/ESLint biasanya sudah bawaan jika ada)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-on: 18
+      - name: Install Frontend Deps
+        run: |
+          cd creditappdemo2
+          npm ci
+      # Menjalankan linter frontend jika terkonfigurasi di package.json
+      # Jika belum ada script lint, baris di bawah bisa di-comment/ganti echo
+      - name: Run Frontend Linter
+        run: |
+          cd creditappdemo2
+          npm run lint || echo "Linter script tidak ditemukan, skip."
+
+  # ==========================================
+  # JOB 3: TEST (Baru jalan setelah LINT sukses)
+  # ==========================================
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Jalankan Unit Test Backend (Java/Maven)
+      - name: Set up JDK 8 (Sesuai maven-eclipse-temurin-8 di proyekmu)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+      - name: Run Backend Unit Tests
+        run: |
+          cd aegira-loan-service
+          ./mvnw test
+
+      # 2. Jalankan E2E Test Frontend (Playwright)
+      - name: Install Frontend Playwright Browsers
+        run: |
+          cd creditappdemo2
+          npm ci
+          npm run setup:e2e
+      - name: Run Frontend E2E Tests
+        run: |
+          cd creditappdemo2
+          npm run test:e2e
+
+  # ==========================================
+  # JOB 4: BUILD & EXPORT ARTIFACT (Pake Runner Lokal)
+  # ==========================================
+  build-image:
+    needs: test
+    runs-on: [self-hosted, docker-local] # Menggunakan runner lokal kamu
+    steps:
+      - name: Checkout kode
+        uses: actions/checkout@v4
+
+      # Build menggunakan Docker Compose (bukan docker build satuan biasa)
+      # agar mengemas frontend dan backend sekaligus
+      - name: Build Docker Images via Compose
+        run: |
+          docker compose build
+
+      # Ekspor Image Backend & Frontend jadi file .tar
+      - name: Save Images as Artifacts
+        run: |
+          # Ganti nama image sesuai nama default image compose-mu (biasanya namafolder-service)
+          docker save 3-docker-compose-with-app-creditapp-ui:latest -o frontend-image.tar
+          docker save 3-docker-compose-with-app-aegira-loan-backend:latest -o backend-image.tar
+
+      # Upload hasil tar ke GitHub Artifacts
+      - name: Upload Frontend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-docker-image
+          path: frontend-image.tar
+
+        Wilk: Upload Backend Artifact
+      - name: Upload Backend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-docker-image
+          path: backend-image.tar

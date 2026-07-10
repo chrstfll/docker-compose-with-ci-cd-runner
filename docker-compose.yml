@@ -10,13 +10,13 @@ services:
       dockerfile: Dockerfile
     container_name: creditapp-ui-container
     ports:
-      - "5173:5173" # Akses aplikasi utama dari browser lewat port 8080
+      - "5173:5173" # Akses aplikasi utama dari browser lewat port 5173 (Vite)
     env_file:
       - ./creditappdemo2/.env
     environment:
       - NODE_ENV=production
-      # Contoh mengarahkan URL API frontend Anda ke backend service Docker
-      - BACKEND_API_URL=http://aegira-loan-backend:8081
+      # Karena port internal Tomcat backend adalah 8080, arahkan ke port tersebut di jaringan Docker internal
+      - BACKEND_API_URL=http://aegira-loan-backend:8080
     networks:
       - aegira-network
     depends_on:
@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
     container_name: aegira-loan-backend-container
     ports:
-      - "8081:8080" # Sesuaikan port ekspos backend jika berbeda (misal: 8080/3000)
+      - "8081:8080" # Akses API/Swagger dari luar lewat port 8081, diarahkan ke port internal 8080
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - SPRING_DATASOURCE_URL=jdbc:postgresql://aegira-db:5432/aegiraloan
@@ -79,6 +79,25 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - aegira-network
+
+  # ==========================================
+  # 5. GITHUB ACTIONS SELF-HOSTED RUNNER
+  # ==========================================
+  runner:
+    image: myoung34/github-runner:latest
+    container_name: github-runner-be-fe
+    environment:
+      REPO_URL: https://github.com/chrstfll/docker-compose-with-ci-cd-runner
+      RUNNER_NAME: laptop-runner
+      RUNNER_TOKEN: BGKRZG37VNCDAQPO6NFSWDTKKEEPM # ← Ganti dengan token yang aktif dari GitHub Settings
+      LABELS: docker-local
+    volumes:
+      # Jalur pintas agar container runner di dalam bisa mengakses sistem Docker di laptop Anda
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./runner-data:/runner/data
+    restart: unless-stopped
     networks:
       - aegira-network
 
