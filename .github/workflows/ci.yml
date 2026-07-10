@@ -76,7 +76,7 @@ jobs:
           npm run test:e2e
 
   # ==========================================
-  # JOB 4: BUILD & AUTOMATIC DEPLOY (Pake Runner Lokal)
+  # JOB 4: BUILD & EXPORT ARTIFACT (Pake Runner Lokal)
   # ==========================================
   build-image:
     needs: test
@@ -85,14 +85,29 @@ jobs:
       - name: Checkout kode
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 1 # ← Dioptimalkan juga untuk runner lokal
 
-      # 1. Build menggunakan Docker Compose untuk memperbarui image lokal
+      # Build menggunakan Docker Compose
       - name: Build Docker Images via Compose
         run: |
           docker compose build
 
-      # 2. HANYA UP APLIKASI UTAMA SAJA, JANGAN SEBUT RUNNER-NYA BIAR GAK BENTROK
-      - name: Deploy / Restart Containers di Laptop Local
+      # Ekspor Image Backend & Frontend jadi file .tar
+      - name: Save Images as Artifacts
         run: |
-          docker compose up -d --force-recreate creditapp-ui aegira-loan-backend aegira-db aegira-cache
+          docker save 3-docker-compose-with-app-creditapp-ui:latest -o frontend-image.tar
+          docker save 3-docker-compose-with-app-aegira-loan-backend:latest -o backend-image.tar
+
+      # Upload hasil tar ke GitHub Artifacts
+      - name: Upload Frontend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-docker-image
+          path: frontend-image.tar
+
+      # Upload Backend Artifact
+      - name: Upload Backend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-docker-image
+          path: backend-image.tar
