@@ -102,7 +102,7 @@ jobs:
           name: frontend-docker-image
           path: frontend-image.tar
 
-        Wilk: Upload Backend Artifact
+      # Upload Backend Artifact
       - name: Upload Backend Artifact
         uses: actions/upload-artifact@v4
         with:
