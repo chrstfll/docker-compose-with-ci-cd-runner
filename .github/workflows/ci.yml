@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1 # ← Sama, dioptimalkan juga di sini
+          fetch-depth: 1
 
       # 1. Jalankan Unit Test Backend (Java/Maven)
       - name: Set up JDK 8
@@ -62,7 +62,7 @@ jobs:
       - name: Run Backend Unit Tests
         run: |
           cd aegira-loan-service
-          ./mvnw test
+          mvn test # ← PERBAIKAN DI SINI: Diubah dari ./mvnw test menjadi mvn test
 
       # 2. Jalankan E2E Test Frontend (Playwright)
       - name: Install Frontend Playwright Browsers
