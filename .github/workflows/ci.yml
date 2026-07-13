@@ -1,4 +1,4 @@
-name: Pipeline Multi-Job Aegira & CreditApp
+name: Pipeline CI/CD Aegira & CreditApp (Separated Build Version)
 
 on:
   push:
@@ -6,108 +6,110 @@ on:
 
 jobs:
   # ==========================================
-  # JOB 1: HELLO (Ucapin Salam)
+  # JOB 1: BUILD & TEST (Kombinasi Lint + Test)
   # ==========================================
-  hello:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Ucapin salam
-        run: echo "Halo, ini pipeline otomatisasi Aegira & CreditApp!"
-      - name: Cek waktu sekarang
-        run: date
-
-  # ==========================================
-  # JOB 2: LINT (Pengecekan Kode)
-  # ==========================================
-  lint:
-    needs: hello
-    runs-on: ubuntu-latest
-    steps:
-      # Mengoptimalkan checkout agar lebih ringan dan mencegah error 128
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1 # ← Hanya ambil commit terakhir agar tidak berat saat kloning
+          fetch-depth: 1
       
-      # Frontend Linting
+      # 1. Setup Node & Lint/Test Frontend
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
-      - name: Install Frontend Deps
+
+      - name: Install & Test Frontend
         run: |
           cd creditappdemo2
           npm ci
-      - name: Run Frontend Linter
-        run: |
-          cd creditappdemo2
           npm run lint || echo "Linter script tidak ditemukan, aman skip."
+          npm run setup:e2e
+          npm run test:e2e
+
+      # 2. Setup Java & Test Backend
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Run Backend Unit Tests
+        run: |
+          cd aegira-loan-service
+          mvn test
 
   # ==========================================
-  # JOB 3: TEST (Baru jalan setelah LINT sukses)
+  # JOB 2: PUSH IMAGES (Dipisah FE & BE)
   # ==========================================
-  test:
-    needs: lint
+  push-images:
+    needs: build-and-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # 1. Jalankan Unit Test Backend (Java/Maven)
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
         with:
-          java-version: '8'
-          distribution: 'temurin'
-      - name: Run Backend Unit Tests
-        run: |
-          cd aegira-loan-service
-          mvn test # ← PERBAIKAN DI SINI: Diubah dari ./mvnw test menjadi mvn test
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 2. Jalankan E2E Test Frontend (Playwright)
-      - name: Install Frontend Playwright Browsers
-        run: |
-          cd creditappdemo2
-          npm ci
-          npm run setup:e2e
-      - name: Run Frontend E2E Tests
-        run: |
-          cd creditappdemo2
-          npm run test:e2e
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- 1. BUILD & PUSH FRONTEND SECARA TERPISAH ---
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./creditappdemo2
+          file: ./creditappdemo2/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/creditappdemo2:latest
+
+      # --- 2. BUILD & PUSH BACKEND SECARA TERPISAH ---
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./aegira-loan-service
+          file: ./aegira-loan-service/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/aegira-loan-service:latest
 
   # ==========================================
-  # JOB 4: BUILD & EXPORT ARTIFACT (Pake Runner Lokal)
+  # JOB 3: PULL & DEPLOY (Pake Runner Lokal)
   # ==========================================
-  build-image:
-    needs: test
+  deploy:
+    needs: push-images
     runs-on: [self-hosted, docker-local]
     steps:
-      - name: Checkout kode
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 1 # ← Dioptimalkan juga untuk runner lokal
+          fetch-depth: 1
 
-      # Build menggunakan Docker Compose
-      - name: Build Docker Images via Compose
+      # --- 1. PULL MASING-MASING IMAGE DARI REGISTRY ---
+      - name: Pull Latest Images from Docker Hub
         run: |
-          docker compose build
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/creditappdemo2:latest
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/aegira-loan-service:latest
 
-      # Ekspor Image Backend & Frontend jadi file .tar
-      - name: Save Images as Artifacts
+      # --- 2. CLEARING CONTAINER CONFLICTS ---
+      - name: Bersihkan Kontainer Aplikasi Lama yang Menggantung
         run: |
-          docker save 3-docker-compose-with-app-creditapp-ui:latest -o frontend-image.tar
-          docker save 3-docker-compose-with-app-aegira-loan-backend:latest -o backend-image.tar
+          docker stop aegira-redis-container aegira-postgres-container || true
+          docker rm aegira-redis-container aegira-postgres-container || true
 
-      # Upload hasil tar ke GitHub Artifacts
-      - name: Upload Frontend Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-docker-image
-          path: frontend-image.tar
-
-      # Upload Backend Artifact
-      - name: Upload Backend Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-docker-image
-          path: backend-image.tar
+      # --- 3. DEPLOY DENGAN KONDISI BARU ---
+      - name: Deploy / Restart Containers di Laptop Local
+        run: |
+          docker compose up -d --force-recreate creditapp-ui aegira-loan-backend aegira-db aegira-cache
