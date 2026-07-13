@@ -86,7 +86,7 @@ services:
     environment:
       REPO_URL: https://github.com/chrstfll/docker-compose-with-ci-cd-runner
       RUNNER_NAME: laptop-runner
-      RUNNER_TOKEN: BGKRZG37VNCDAQPO6NFSWDTKKEEPM
+      RUNNER_TOKEN: BGKRZG4OLLNOEKC2UTRIK4LKKRLKK
       LABELS: docker-local
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
